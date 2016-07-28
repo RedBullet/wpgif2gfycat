@@ -55,49 +55,101 @@ class Wpgif2gfycat_Admin {
 	}
 
 	/**
-	 * Register the stylesheets for the admin area.
+	 * Get an attachment ID given a URL.
 	 *
-	 * @since    1.0.0
+	 * @param string $url
+	 *
+	 * @return int Attachment ID on success, 0 on failure
 	 */
-	public function enqueue_styles() {
+	function get_image_id_by_url( $url ) {
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Wpgif2gfycat_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Wpgif2gfycat_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
+		$attachment_id = 0;
+		$dir = wp_upload_dir();
 
-		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/wpgif2gfycat-admin.css', array(), $this->version, 'all' );
+		if ( false !== strpos( $url, $dir['baseurl'] . '/' ) ) { // Is URL in uploads directory?
 
+			$file = basename( $url );
+			$query_args = array(
+				'post_type'   => 'attachment',
+				'post_status' => 'inherit',
+				'fields'      => 'ids',
+				'meta_query'  => array(
+					array(
+						'value'   => $file,
+						'compare' => 'LIKE',
+						'key'     => '_wp_attachment_metadata',
+					),
+				)
+			);
+
+			$query = new WP_Query( $query_args );
+
+			if ( $query->have_posts() ) {
+				foreach ( $query->posts as $post_id ) {
+
+					$meta = wp_get_attachment_metadata( $post_id );
+					$original_file       = basename( $meta['file'] );
+					$cropped_image_files = wp_list_pluck( $meta['sizes'], 'file' );
+
+					if ( $original_file === $file || in_array( $file, $cropped_image_files ) ) {
+						$attachment_id = $post_id;
+						break;
+					}
+
+				}
+			}
+		}
+
+		return $attachment_id;
 	}
 
 	/**
-	 * Register the JavaScript for the admin area.
-	 *
+	 * Try and get a gfycat for the gif instead
 	 * @since    1.0.0
 	 */
-	public function enqueue_scripts() {
+	public function get_gfycat($metadata, $id) {
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Wpgif2gfycat_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Wpgif2gfycat_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
+		// Check type is gif
+		if (isset($metadata) && $metadata['sizes']['thumbnail']['mime-type'] == 'image/gif') {
+			// Upload to gfycat
+			$url = wp_get_attachment_url( $id );
+			$hash = md5($url.time());
+			$code = substr($hash,0,10);
+			$gfycat_url = 'https://upload.gfycat.com/transcodeRelease/'.$code.'?fetchUrl='.$url;
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/wpgif2gfycat-admin.js', array( 'jquery' ), $this->version, false );
+			$request = new WP_Http();
+			$response = $request->get( $gfycat_url );
 
+			// Stash the code as meta on the image for later
+			update_post_meta( $id, 'gfycat_code', $code );
+			$metadata['gfycat_code'] = $code;
+		}
+
+		return $metadata;
+
+	}
+
+	function filter_attachment_fields_to_edit( $form_fields, $post ) {
+		$code = get_post_meta( $post->ID, 'gfycat_code', true );
+		if (isset($code) && $code != '') {
+			$html5video_replace = get_post_meta($post->ID, 'html5video_replace', true);
+
+			$form_fields['html5video_replace'] = array(
+			'label' => 'Replace with HTML5 video',
+			'input' => 'html',
+			'html' => '<label for="attachments-'.$post->ID.'-foo"> '.
+			'<input type="checkbox" id="attachments-'.$post->ID.'-foo" name="attachments['.$post->ID.'][html5video_replace]" value="1"'.($html5video_replace ? ' checked="checked"' : '').' /></label>  ',
+			'value' => $html5video_replace
+			);
+		}
+		return $form_fields;
+	}
+
+	function image_attachment_fields_to_save($post, $attachment) {
+		if( isset($attachment['html5video_replace']) ){
+			update_post_meta($post['ID'], 'html5video_replace', $attachment['html5video_replace']);
+		}
+		return $post;
 	}
 
 }

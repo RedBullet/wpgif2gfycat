@@ -151,9 +151,10 @@ class Wpgif2gfycat {
 
 		$plugin_admin = new Wpgif2gfycat_Admin( $this->get_plugin_name(), $this->get_version() );
 
-		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
-		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
-
+		//$this->loader->add_filter( 'wp_handle_upload', $plugin_admin, 'get_gfycat' );
+		$this->loader->add_filter( 'wp_generate_attachment_metadata', $plugin_admin, 'get_gfycat', 10, 2 );
+		$this->loader->add_filter( 'attachment_fields_to_edit', $plugin_admin, 'filter_attachment_fields_to_edit', 10, 2 );
+		$this->loader->add_filter( 'attachment_fields_to_save', $plugin_admin, 'image_attachment_fields_to_save', 10, 2 );
 	}
 
 	/**
@@ -167,8 +168,7 @@ class Wpgif2gfycat {
 
 		$plugin_public = new Wpgif2gfycat_Public( $this->get_plugin_name(), $this->get_version() );
 
-		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
-		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
+		$this->loader->add_filter( 'wp_get_attachment_metadata', $plugin_public, 'check_gfycat', 10, 2 );
 
 	}
 

@@ -54,50 +54,66 @@ class Wpgif2gfycat_Public {
 
 	}
 
-	/**
-	 * Register the stylesheets for the public-facing side of the site.
-	 *
-	 * @since    1.0.0
-	 */
-	public function enqueue_styles() {
+	public function generate_gfycat($id) {
+		// Upload to gfycat
+		$url = wp_get_attachment_url( $id );
+		$hash = md5($url.time());
+		$code = substr($hash,0,10);
+		$gfycat_url = 'https://upload.gfycat.com/transcodeRelease/'.$code.'?fetchUrl='.$url;
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Wpgif2gfycat_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Wpgif2gfycat_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
+		$request = new WP_Http();
+		$response = $request->get( $gfycat_url );
 
-		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/wpgif2gfycat-public.css', array(), $this->version, 'all' );
+		// Stash the code as meta on the image for later
+		update_post_meta( $id, 'gfycat_code', $code );
 
+		return $code;
 	}
 
 	/**
-	 * Register the JavaScript for the public-facing side of the site.
+	 * Check if we have a gfycat finished
 	 *
 	 * @since    1.0.0
 	 */
-	public function enqueue_scripts() {
-
+	public function check_gfycat($metadata, $id) {
 		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Wpgif2gfycat_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Wpgif2gfycat_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
+		 * Check for gfycat status or complete
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/wpgif2gfycat-public.js', array( 'jquery' ), $this->version, false );
+		if (is_array($metadata)) {
+			if (get_post_meta( $id, 'html5video_replace', true )) {
+				$code = get_post_meta( $id, 'gfycat_code', true );
 
+				if (isset($code) && $code != '') {
+					$metadata['gfycat_code'] = $code;
+
+					$name = get_post_meta( $id, 'gfycat_name', true );
+
+					if (isset($name) && $name != '') {
+						$metadata['gfycat_name'] = $name;
+					} else {
+						$request = new WP_Http();
+						$gfycat_url = 'http://upload.gfycat.com/status/'.$code;
+						$response = $request->get( $gfycat_url );
+
+						if (isset($response) && is_array($response) && $response['body']) {
+							$response = json_decode($response['body']);
+
+							if (isset($response->gfyname)) {
+								update_post_meta( $id, 'gfycat_name', $response->gfyname );
+								$metadata['gfycat_name'] = $response->gfyname;
+							} else if (isset($response->error) || $response->task == "NotFoundo") {
+								$metadata['gfycat_code'] = $this->generate_gfycat($id);
+							}
+						}
+					}
+				// Patch for previously uploaded images
+				} else if (isset($metadata) && $metadata['sizes']['thumbnail']['mime-type'] == 'image/gif') {
+					$metadata['gfycat_code'] = $this->generate_gfycat($id);
+				}
+			}
+		}
+		return $metadata;
 	}
 
 }

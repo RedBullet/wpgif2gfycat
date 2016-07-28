@@ -15,7 +15,7 @@
  * @wordpress-plugin
  * Plugin Name:       WP Gif 2 Gfycat
  * Plugin URI:        http://github.com/redbullet/wpgif2gfycat
- * Description:       This is a short description of what the plugin does. It's displayed in the WordPress admin area.
+ * Description:       Convert gifs to gfycat video on upload
  * Version:           1.0.0
  * Author:            Gavyn McKenzie
  * Author URI:        http://redbullet.co.uk
